@@ -11,6 +11,7 @@ import edu.umd.cs.findbugs.annotations.Nullable;
 import hudson.Extension;
 import hudson.FilePath;
 import hudson.Launcher;
+import hudson.Util;
 import hudson.model.Item;
 import hudson.model.Job;
 import hudson.model.Run;
@@ -250,7 +251,14 @@ public class OrasSCM extends SCM {
             Registry registry = (username == null || username.isEmpty())
                     ? builder.defaults().build()
                     : builder.defaults(username, password).build();
-            if (!workspace.exists() && !workspace.mkdirs()) {
+            // The destination directory can be reused across builds (e.g. the hashed "@script" directory
+            // CpsScmFlowDefinition uses to fetch the Jenkinsfile). Wipe it first rather than extracting on top
+            // of leftovers: previously checked-out content can contain read-only files (e.g. packaged .git
+            // objects), which OCI.PullOptions.overwrite() cannot overwrite in place and fails with
+            // AccessDeniedException.
+            if (workspace.exists()) {
+                Util.deleteContentsRecursive(workspace);
+            } else if (!workspace.mkdirs()) {
                 throw new IOException("Unable to create workspace directory: " + workspace);
             }
             registry.pullArtifact(ContainerRef.parse(containerRef), workspace.toPath(), OCI.PullOptions.overwrite());

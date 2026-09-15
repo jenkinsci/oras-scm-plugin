@@ -176,6 +176,37 @@ class OrasSCMTest {
     }
 
     @Test
+    void shouldSucceedOnASecondBuildEvenWhenThePreviousCheckoutLeftReadOnlyFiles(
+            JenkinsRule jenkinsRule, @TempDir Path tempDir) throws Exception {
+        // CpsScmFlowDefinition checks out the SCM into a fixed, hashed "@script" directory that is reused
+        // across builds (it is not wiped between builds by Jenkins itself). If the packaged repository
+        // contains files that end up read-only on disk after the first checkout (e.g. real .git objects,
+        // which git creates as read-only), a naive "extract on top" second checkout must not fail.
+        Path readOnlyRepo = tempDir.resolve("repo");
+        Files.createDirectories(readOnlyRepo.resolve("data"));
+        Files.writeString(readOnlyRepo.resolve("Jenkinsfile"), Files.readString(REPO_DIR.resolve("Jenkinsfile")));
+        Files.writeString(readOnlyRepo.resolve("data/hello.txt"), "hello-from-oras\n");
+        Path readOnlyFile = readOnlyRepo.resolve("data/readonly.dat");
+        Files.writeString(readOnlyFile, "immutable");
+        assertTrue(readOnlyFile.toFile().setReadOnly(), "Failed to mark test fixture file read-only");
+
+        ContainerRef ref = ContainerRef.parse("%s/repo:readonly".formatted(container.getRegistry()));
+        registry.pushArtifact(ref, OrasSCM.ARTIFACT_TYPE_REPO, LocalPath.of(readOnlyRepo));
+
+        OrasSCM scm = new OrasSCM(ref.toString());
+        scm.setInsecure(true);
+
+        WorkflowJob p = jenkinsRule.createProject(WorkflowJob.class, "double-build");
+        p.setDefinition(new CpsScmFlowDefinition(scm, "repo/Jenkinsfile"));
+
+        WorkflowRun b1 = jenkinsRule.buildAndAssertSuccess(p);
+        jenkinsRule.assertLogContains("content=hello-from-oras", b1);
+
+        WorkflowRun b2 = jenkinsRule.buildAndAssertSuccess(p);
+        jenkinsRule.assertLogContains("content=hello-from-oras", b2);
+    }
+
+    @Test
     void shouldPreserveScmSelectionThroughARealFormSubmissionRoundTrip(JenkinsRule jenkinsRule) throws Exception {
         String ref = pushRepo("form-round-trip");
 
