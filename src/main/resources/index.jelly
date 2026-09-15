@@ -1,4 +1,4 @@
 <?jelly escape-by-default='true'?>
 <div>
-    TODO
+    Checks out a repository packaged as an OCI artifact using the ORAS client.
 </div>

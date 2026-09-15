@@ -1,0 +1,14 @@
+pipeline {
+    agent any
+    stages {
+        stage('Verify checkout') {
+            steps {
+                echo "Building..."
+                script {
+                    def content = readFile('repo/data/hello.txt').trim()
+                    echo "content=${content}"
+                }
+            }
+        }
+    }
+}

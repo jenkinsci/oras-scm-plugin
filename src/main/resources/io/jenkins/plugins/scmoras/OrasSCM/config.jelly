@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?jelly escape-by-default='true'?>
+<j:jelly xmlns:j="jelly:core" xmlns:f="/lib/form" xmlns:c="/lib/credentials">
+    <f:entry field="containerRef" title="Container reference" description="The artifact reference to the OCI registry where the repository is stored.">
+        <f:textbox/>
+    </f:entry>
+    <f:entry field="credentialsId" title="Credentials">
+        <c:select />
+    </f:entry>
+    <f:advanced>
+        <f:checkbox title="Insecure" field="insecure" description="Set insecure registry that use HTTP scheme. Use at your own risks."/>
+    </f:advanced>
+    <f:validateButton title="${%Test Connection}" progress="${%Testing...}"
+                      method="testConnection"
+                      with="containerRef,credentialsId,insecure"/>
+</j:jelly>
