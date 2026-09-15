@@ -6,11 +6,13 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import hudson.FilePath;
 import hudson.model.FreeStyleProject;
 import hudson.model.Result;
 import hudson.model.TaskListener;
 import hudson.scm.PollingResult;
 import hudson.scm.SCM;
+import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -97,6 +99,38 @@ class OrasSCMTest {
         p.setDefinition(new CpsScmFlowDefinition(scm, "repo/Jenkinsfile"));
 
         WorkflowRun b = jenkinsRule.buildAndAssertSuccess(p);
+        jenkinsRule.assertLogContains("content=hello-from-oras", b);
+    }
+
+    @Test
+    void shouldFetchOnlyTheScriptWithLightweightCheckoutWithoutMaterializingTheRepoOnTheController(
+            JenkinsRule jenkinsRule) throws Exception {
+        String ref = pushRepo("lightweight");
+
+        OrasSCM scm = new OrasSCM(ref);
+        scm.setInsecure(true);
+
+        WorkflowJob p = jenkinsRule.createProject(WorkflowJob.class, "lightweight-checkout");
+        CpsScmFlowDefinition definition = new CpsScmFlowDefinition(scm, "repo/Jenkinsfile");
+        definition.setLightweight(true);
+        p.setDefinition(definition);
+
+        WorkflowRun b = jenkinsRule.buildAndAssertSuccess(p);
+        // CpsScmFlowDefinition logs this only when the SCMFileSystem (lightweight) path served the script;
+        // the full-checkout fallback instead logs "Checking out ... into ... to read ...".
+        jenkinsRule.assertLogContains("Obtained repo/Jenkinsfile from " + scm.getKey(), b);
+        jenkinsRule.assertLogNotContains("Checking out " + scm.getKey() + " into", b);
+
+        // The repository content is still checked out normally onto the agent workspace by the pipeline's own
+        // "agent any" (implicit checkout scm), but the *controller-side* hashed "@script" directory that
+        // CpsScmFlowDefinition uses to hold a full checkout when just reading the script must never be created.
+        FilePath baseWorkspace = jenkinsRule.jenkins.getWorkspaceFor(p);
+        assertNotNull(baseWorkspace);
+        File scriptCheckoutDir = new File(baseWorkspace.getRemote() + "@script");
+        assertFalse(
+                scriptCheckoutDir.exists(),
+                "Lightweight checkout must not extract the repository to " + scriptCheckoutDir);
+
         jenkinsRule.assertLogContains("content=hello-from-oras", b);
     }
 

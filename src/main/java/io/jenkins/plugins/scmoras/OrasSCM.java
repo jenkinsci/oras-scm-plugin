@@ -186,7 +186,7 @@ public class OrasSCM extends SCM {
         return "oras-" + containerRef;
     }
 
-    private static void ensureArtifactType(Manifest manifest) {
+    static void ensureArtifactType(Manifest manifest) {
         if (!Objects.equals(
                 ARTIFACT_TYPE_REPO.getMediaType(), manifest.getArtifactType().getMediaType())) {
             throw new IllegalArgumentException(
@@ -195,7 +195,7 @@ public class OrasSCM extends SCM {
         }
     }
 
-    private static Registry buildRegistry(StandardUsernamePasswordCredentials credentials, boolean insecure) {
+    static Registry buildRegistry(StandardUsernamePasswordCredentials credentials, boolean insecure) {
         Registry.Builder builder = Registry.builder().withPolicy(ContainersPolicy.newPolicy());
         if (insecure) {
             builder = builder.insecure();
