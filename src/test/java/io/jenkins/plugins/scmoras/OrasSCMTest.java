@@ -2,25 +2,40 @@ package io.jenkins.plugins.scmoras;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import hudson.model.FreeStyleProject;
 import hudson.model.Result;
 import hudson.model.TaskListener;
 import hudson.scm.PollingResult;
+import hudson.scm.SCM;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import javaposse.jobdsl.plugin.ExecuteDslScripts;
+import javaposse.jobdsl.plugin.LookupStrategy;
+import javaposse.jobdsl.plugin.RemovedConfigFilesAction;
+import javaposse.jobdsl.plugin.RemovedJobAction;
+import javaposse.jobdsl.plugin.RemovedViewAction;
 import land.oras.ArtifactType;
 import land.oras.ContainerRef;
 import land.oras.LocalPath;
 import land.oras.Manifest;
 import land.oras.Registry;
+import org.htmlunit.html.DomElement;
+import org.htmlunit.html.HtmlForm;
+import org.htmlunit.html.HtmlPage;
+import org.htmlunit.html.HtmlRadioButtonInput;
+import org.htmlunit.html.HtmlTextInput;
 import org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition;
 import org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition;
 import org.jenkinsci.plugins.workflow.job.WorkflowJob;
 import org.jenkinsci.plugins.workflow.job.WorkflowRun;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.junit.jupiter.WithJenkins;
 import org.testcontainers.junit.jupiter.Container;
@@ -118,8 +133,8 @@ class OrasSCMTest {
     }
 
     @Test
-    void shouldDetectChangesWhenArtifactIsUpdatedOnTheSameTag(
-            JenkinsRule jenkinsRule, @org.junit.jupiter.api.io.TempDir Path tempDir) throws Exception {
+    void shouldDetectChangesWhenArtifactIsUpdatedOnTheSameTag(JenkinsRule jenkinsRule, @TempDir Path tempDir)
+            throws Exception {
         String tag = "poll-change";
         String ref = pushRepo(tag);
 
@@ -158,5 +173,106 @@ class OrasSCMTest {
         assertEquals(ref, reloaded.getContainerRef());
         assertTrue(reloaded.isInsecure());
         assertEquals("", reloaded.getCredentialsId(), "Credentials ID should be empty by default");
+    }
+
+    @Test
+    void shouldPreserveScmSelectionThroughARealFormSubmissionRoundTrip(JenkinsRule jenkinsRule) throws Exception {
+        String ref = pushRepo("form-round-trip");
+
+        // Simulate a real user: start from a job with no SCM, select the "ORAS" radio button on the
+        // configure page, fill in the container reference, and submit the form exactly like the browser would.
+        FreeStyleProject p = jenkinsRule.createFreeStyleProject("form-round-trip");
+        JenkinsRule.WebClient wc = jenkinsRule.createWebClient();
+        HtmlPage page = wc.getPage(p, "configure");
+
+        DomElement orasLabel = page.getFirstByXPath("//label[normalize-space(text())='ORAS']");
+        assertNotNull(orasLabel, "The ORAS radio button should be offered in Source Code Management");
+        HtmlRadioButtonInput orasRadio = (HtmlRadioButtonInput) page.getElementById(orasLabel.getAttribute("for"));
+        orasRadio.click();
+        ((HtmlTextInput) page.getElementsByName("_.containerRef").get(0)).setValueAttribute(ref);
+        HtmlForm form = page.getFormByName("config");
+        jenkinsRule.submit(form);
+
+        FreeStyleProject saved = jenkinsRule.jenkins.getItemByFullName("form-round-trip", FreeStyleProject.class);
+        assertInstanceOf(OrasSCM.class, saved.getScm());
+        assertEquals(ref, ((OrasSCM) saved.getScm()).getContainerRef());
+
+        // And crucially: re-opening the edit page must show ORAS as the selected SCM, with the
+        // container reference pre-filled, not silently fall back to "None".
+        HtmlPage editPage = wc.getPage(saved, "configure");
+        List<DomElement> checkedOrasRadios = editPage.getByXPath(
+                "//input[@name='scm' and @checked and following-sibling::label[normalize-space(text())='ORAS']]");
+        assertFalse(checkedOrasRadios.isEmpty(), "ORAS should be pre-selected when editing the job");
+        assertEquals(
+                ref,
+                ((HtmlTextInput) editPage.getElementsByName("_.containerRef").get(0)).getValueAttribute(),
+                "The container reference should be pre-filled when editing the job");
+    }
+
+    @Test
+    void shouldBeApplicableToPipelineJobsSoItAppearsInTheScmDropdownWhenEditing(JenkinsRule jenkinsRule)
+            throws Exception {
+        String ref = pushRepo("applicable-to-pipeline");
+
+        OrasSCM scm = new OrasSCM(ref);
+        scm.setInsecure(true);
+
+        WorkflowJob p = jenkinsRule.createProject(WorkflowJob.class, "applicable-to-pipeline");
+        p.setDefinition(new CpsScmFlowDefinition(scm, "Jenkinsfile"));
+        p.save();
+
+        // Regression test for: WorkflowJob is not a hudson.model.AbstractProject, and the default
+        // SCMDescriptor#isApplicable(Job) only returns true for AbstractProject jobs. Without overriding it,
+        // OrasSCM silently disappears from hudson.scm.SCM._for(job), which backs the "SCM" dropdown of
+        // "Pipeline script from SCM" - so it can never be selected, or shown as selected, on a Pipeline job.
+        assertTrue(
+                SCM._for(p).stream().anyMatch(d -> d instanceof OrasSCM.DescriptorImpl),
+                "OrasSCM must be applicable to Pipeline jobs");
+
+        JenkinsRule.WebClient wc = jenkinsRule.createWebClient();
+        HtmlPage page = wc.getPage(p, "configure");
+        List<DomElement> containerRefInputs = page.getElementsByName("_.containerRef");
+        assertFalse(containerRefInputs.isEmpty(), "The ORAS SCM fields should render on the Pipeline edit page");
+        assertEquals(
+                ref,
+                ((HtmlTextInput) containerRefInputs.get(0)).getValueAttribute(),
+                "The container reference should be pre-filled when editing the Pipeline job");
+    }
+
+    @Test
+    void shouldConfigureOrasScmFromAJobDslSeedJob(JenkinsRule jenkinsRule) throws Exception {
+        String ref = pushRepo("job-dsl");
+
+        String dslScript = """
+                job('dsl-generated') {
+                    scm {
+                        oras {
+                            containerRef('%s')
+                            insecure(true)
+                        }
+                    }
+                }
+                """.formatted(ref);
+
+        ExecuteDslScripts dsl = new ExecuteDslScripts();
+        dsl.setScriptText(dslScript);
+        dsl.setUseScriptText(true);
+        dsl.setSandbox(true);
+        dsl.setFailOnMissingPlugin(true);
+        dsl.setRemovedJobAction(RemovedJobAction.IGNORE);
+        dsl.setRemovedViewAction(RemovedViewAction.IGNORE);
+        dsl.setRemovedConfigFilesAction(RemovedConfigFilesAction.IGNORE);
+        dsl.setLookupStrategy(LookupStrategy.JENKINS_ROOT);
+
+        FreeStyleProject seed = jenkinsRule.createFreeStyleProject("seed");
+        seed.getBuildersList().add(dsl);
+        jenkinsRule.buildAndAssertSuccess(seed);
+
+        FreeStyleProject generated = jenkinsRule.jenkins.getItemByFullName("dsl-generated", FreeStyleProject.class);
+        assertNotNull(generated, "Job DSL should have generated the 'dsl-generated' job");
+        assertInstanceOf(OrasSCM.class, generated.getScm());
+        OrasSCM generatedScm = (OrasSCM) generated.getScm();
+        assertEquals(ref, generatedScm.getContainerRef());
+        assertTrue(generatedScm.isInsecure());
     }
 }

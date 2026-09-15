@@ -267,6 +267,14 @@ public class OrasSCM extends SCM {
             super(null);
         }
 
+        @Override
+        public boolean isApplicable(Job project) {
+            // The default in SCMDescriptor only returns true for AbstractProject (Freestyle-like) jobs.
+            // Without this override, WorkflowJob (Pipeline) never sees OrasSCM as an option: it is silently
+            // missing from the "Pipeline script from SCM" SCM dropdown and cannot be selected or edited there.
+            return true;
+        }
+
         @NonNull
         @Override
         public String getDisplayName() {
