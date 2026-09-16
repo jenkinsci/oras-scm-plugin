@@ -1,10 +1,5 @@
 # ORAS SCM Plugin
 
-[![Build Status](https://ci.jenkins.io/buildStatus/icon?job=Plugins/oras-scm-plugin/main)](https://ci.jenkins.io/job/plugins/job/oras-scm-plugin/)
-[![Jenkins Plugin](https://img.shields.io/jenkins/plugin/v/oras-scm.svg)](https://plugins.jenkins.io/oras-scm/)
-[![GitHub release](https://img.shields.io/github/release/jenkinsci/oras-scm-plugin.svg?label=changelog)](https://github.com/jenkinsci/oras-scm-plugin/releases/latest)
-[![Contributors](https://img.shields.io/github/contributors/jenkinsci/oras-scm-plugin.svg)](https://github.com/jenkinsci/oras-scm-plugin/graphs/contributors)
-
 ## Introduction
 
 This plugin provides an SCM (`hudson.scm.SCM`) implementation that checks out a repository packaged as an
@@ -18,8 +13,8 @@ record against a build, exactly like Git or Subversion.
 
 ### Which plugin should I use?
 
-Both plugins can serve a repository packaged as an `application/vnd.jenkins.repo.manifest.v1+json` artifact, and
-they are not mutually exclusive - a job can use `pipeline-cps-oras` to fetch its Jenkinsfile and this plugin,
+Both plugins can serve a pipeline script packaged as an `application/vnd.jenkins.repo.manifest.v1+json` artifact, and
+they are NOT mutually exclusive - a job can use `pipeline-cps-oras` to fetch its Jenkinsfile and this plugin,
 separately, to check out the rest of the repository. As a rule of thumb:
 
 - **`pipeline-cps-oras`** is the simpler choice for ad-hoc or generated pipelines where you just need to run a
@@ -59,6 +54,8 @@ oras push localhost:5000/hello:latest --artifact-type application/vnd.jenkins.re
 The whole content of the artifact is extracted into the build workspace on every checkout, and the manifest
 digest is used to detect changes when polling.
 
+![config.png](docs/config.png)
+
 ### Implicit checkout in a declarative pipeline
 
 In the job configuration, under **Pipeline**, choose the **Pipeline script from SCM** definition, then pick
@@ -91,11 +88,7 @@ pipeline {
 }
 ```
 
-or the classic `$class` map syntax:
-
-```groovy
-checkout([$class: 'OrasSCM', containerRef: 'localhost:5000/hello:latest', insecure: true])
-```
+![declarative_checkout.png](docs/declarative_checkout.png)
 
 ### Freestyle projects
 
