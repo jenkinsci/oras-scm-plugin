@@ -26,6 +26,7 @@ import land.oras.ContainerRef;
 import land.oras.LocalPath;
 import land.oras.Manifest;
 import land.oras.Registry;
+import land.oras.utils.ZotUnsecureContainer;
 import org.htmlunit.html.DomElement;
 import org.htmlunit.html.HtmlForm;
 import org.htmlunit.html.HtmlPage;
@@ -48,7 +49,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class OrasSCMTest {
 
     @Container
-    private final ZotContainer container = new ZotContainer().withStartupAttempts(3);
+    private final ZotUnsecureContainer container = new ZotUnsecureContainer().withStartupAttempts(3);
 
     private static final Path REPO_DIR = Path.of("src/test/resources/repo").toAbsolutePath();
 
