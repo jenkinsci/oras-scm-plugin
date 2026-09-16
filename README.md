@@ -16,6 +16,19 @@ pipeline job fetch its Jenkinsfile from an OCI registry, but jobs configured tha
 plugin fills that gap by making the repository artifact itself a real SCM that Jenkins can check out, poll, and
 record against a build, exactly like Git or Subversion.
 
+### Which plugin should I use?
+
+Both plugins can serve a repository packaged as an `application/vnd.jenkins.repo.manifest.v1+json` artifact, and
+they are not mutually exclusive - a job can use `pipeline-cps-oras` to fetch its Jenkinsfile and this plugin,
+separately, to check out the rest of the repository. As a rule of thumb:
+
+- **`pipeline-cps-oras`** is the simpler choice for ad-hoc or generated pipelines where you just need to run a
+  script and don't care about SCM semantics.
+- **`oras-scm`** (this plugin) is recommended once you are packaging full repositories for regular CI activity,
+  because it integrates with Jenkins' existing SCM checkout machinery instead of working around it: `checkout scm`
+  (implicit or explicit), changelogs, SCM polling/triggers, lightweight checkout, and the standard SCM dropdowns
+  on Freestyle and "Pipeline script from SCM" jobs all work as they would with Git or Subversion.
+
 > [!WARNING]
 > The ORAS Java SDK is currently in **beta** state and might impact the stability of this plugin.
 >
