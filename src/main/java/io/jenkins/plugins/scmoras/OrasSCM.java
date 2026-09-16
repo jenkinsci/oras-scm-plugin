@@ -26,6 +26,7 @@ import hudson.scm.SCMRevisionState;
 import hudson.security.ACL;
 import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
+import hudson.util.Secret;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serial;
@@ -127,7 +128,7 @@ public class OrasSCM extends SCM {
         listener.getLogger().printf("Checking out %s with digest %s into %s%n", containerRef, digest, workspace);
 
         String username = credentials != null ? credentials.getUsername() : null;
-        String password = credentials != null ? credentials.getPassword().getPlainText() : null;
+        Secret password = credentials != null ? credentials.getPassword() : null;
         workspace.act(new PullTask(ref.withDigest(digest).toString(), insecure, username, password));
 
         if (changelogFile != null) {
@@ -235,9 +236,9 @@ public class OrasSCM extends SCM {
         private final String containerRef;
         private final boolean insecure;
         private final String username;
-        private final String password;
+        private final Secret password;
 
-        PullTask(String containerRef, boolean insecure, String username, String password) {
+        PullTask(String containerRef, boolean insecure, String username, Secret password) {
             this.containerRef = containerRef;
             this.insecure = insecure;
             this.username = username;
@@ -252,7 +253,7 @@ public class OrasSCM extends SCM {
             }
             Registry registry = (username == null || username.isEmpty())
                     ? builder.defaults().build()
-                    : builder.defaults(username, password).build();
+                    : builder.defaults(username, password.getPlainText()).build();
             if (workspace.exists()) {
                 Util.deleteContentsRecursive(workspace);
             } else if (!workspace.mkdirs()) {
@@ -306,7 +307,7 @@ public class OrasSCM extends SCM {
                     .includeCurrentValue(credentialsId);
         }
 
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"unused", "lgtm[jenkins/csrf]", "lgtm[jenkins/no-permission-check]"})
         public FormValidation doCheckContainerRef(@QueryParameter String value) {
             if (value == null || value.isBlank()) {
                 return FormValidation.error("Reference is required");
