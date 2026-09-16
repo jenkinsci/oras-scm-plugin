@@ -28,9 +28,10 @@ import hudson.util.FormValidation;
 import hudson.util.ListBoxModel;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serial;
 import java.util.Collections;
 import java.util.Objects;
-import jenkins.MasterToSlaveFileCallable;
+import jenkins.agents.ControllerToAgentFileCallable;
 import jenkins.model.Jenkins;
 import land.oras.ArtifactType;
 import land.oras.ContainerRef;
@@ -226,8 +227,9 @@ public class OrasSCM extends SCM {
      * Pulls and extracts the repository artifact into the workspace. Runs on the node holding the workspace
      * (which may be a remote agent), so it must only rely on plain, serializable data.
      */
-    private static final class PullTask extends MasterToSlaveFileCallable<Void> {
+    private static final class PullTask implements ControllerToAgentFileCallable<Void> {
 
+        @Serial
         private static final long serialVersionUID = 1L;
 
         private final String containerRef;
