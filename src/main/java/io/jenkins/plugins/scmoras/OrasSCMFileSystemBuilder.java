@@ -81,8 +81,6 @@ public class OrasSCMFileSystemBuilder extends SCMFileSystem.Builder {
         }
         Layer layer = selectGzipLayer(manifest);
         if (layer == null) {
-            // Not a plain tar.gz directory layer (e.g. zip or zstd compressed): we only know how to stream tar.gz
-            // without extracting to disk, so decline and let CpsScmFlowDefinition fall back to a full checkout.
             LOG.debug(
                     "No {} layer found for {}, lightweight checkout is not supported for this artifact",
                     Const.DEFAULT_BLOB_DIR_MEDIA_TYPE,

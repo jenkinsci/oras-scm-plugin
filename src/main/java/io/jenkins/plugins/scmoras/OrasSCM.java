@@ -251,11 +251,6 @@ public class OrasSCM extends SCM {
             Registry registry = (username == null || username.isEmpty())
                     ? builder.defaults().build()
                     : builder.defaults(username, password).build();
-            // The destination directory can be reused across builds (e.g. the hashed "@script" directory
-            // CpsScmFlowDefinition uses to fetch the Jenkinsfile). Wipe it first rather than extracting on top
-            // of leftovers: previously checked-out content can contain read-only files (e.g. packaged .git
-            // objects), which OCI.PullOptions.overwrite() cannot overwrite in place and fails with
-            // AccessDeniedException.
             if (workspace.exists()) {
                 Util.deleteContentsRecursive(workspace);
             } else if (!workspace.mkdirs()) {
@@ -277,9 +272,6 @@ public class OrasSCM extends SCM {
 
         @Override
         public boolean isApplicable(Job project) {
-            // The default in SCMDescriptor only returns true for AbstractProject (Freestyle-like) jobs.
-            // Without this override, WorkflowJob (Pipeline) never sees OrasSCM as an option: it is silently
-            // missing from the "Pipeline script from SCM" SCM dropdown and cannot be selected or edited there.
             return true;
         }
 
